@@ -17,8 +17,16 @@ def home():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    data = request.json
-    print("📩 Alerta recibida:", data)
+    print("🔍 Headers:", dict(request.headers))
+    print("🔍 Body:", request.data.decode('utf-8'))
+    
+    try:
+        data = request.get_json(force=True)
+        print("📩 Alerta recibida:", data)
+    except Exception as e:
+        print("❌ Error al parsear JSON:", str(e))
+        return 'Invalid JSON', 400
+
 
     ahora = time.time()
     señales.append({
