@@ -46,3 +46,10 @@ def enviar_alerta(mensaje):
     print("🚨 Enviando alerta:", mensaje)
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     requests.post(url, data={'chat_id': CHAT_ID, 'text': mensaje})
+
+import os
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
+
