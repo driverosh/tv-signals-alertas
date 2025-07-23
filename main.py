@@ -1,15 +1,17 @@
 from flask import Flask, request
 import time
 import requests
+import os
+from collections import deque
 
 app = Flask(__name__)
 
-# 👇 Reemplaza con tu bot y chat real
+# Telegram config
 TELEGRAM_TOKEN = '7987965778:AAGTlTvYdUIw-O2F5kjopasav7B1FmKEyok'
 CHAT_ID = '8155134155'
 
-# Registro de señales
-señales = []
+# Señales recibidas recientemente
+señales = deque(maxlen=100)  # mantiene las últimas 100 señales
 
 @app.route('/')
 def home():
@@ -17,47 +19,54 @@ def home():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    print("🔍 Headers:", dict(request.headers))
-    print("🔍 Body:", request.data.decode('utf-8'))
-    
+    print("🔥 Webhook recibido", flush=True)
+
+    # Ver contenido en bruto
+    body = request.data.decode('utf-8')
+    print("🔍 Body:", body, flush=True)
+
     try:
         data = request.get_json(force=True)
-        print("📩 Alerta recibida:", data)
+        source = data.get('source')
+        if not source:
+            print("⚠️ Alerta ignorada: 'source' vacío o ausente", flush=True)
+            return 'Missing source', 400
+
+        ahora = time.time()
+        señales.append({'source': source, 'timestamp': ahora})
+        print(f"📩 [{source}] recibida a las {time.strftime('%H:%M:%S')}", flush=True)
+
+        # Filtrar señales de los últimos 5 minutos
+        recientes = [s for s in señales if ahora - s['timestamp'] < 300]
+        fuentes = set(s['source'] for s in recientes)
+
+        if {'OG Long', 'Bullish FVG'}.issubset(fuentes):
+            enviar_alerta("✅ Señal ALCISTA: OG Long + Bullish FVG")
+            # eliminar esas señales específicas
+            limpiar_señales(['OG Long', 'Bullish FVG'], recientes)
+
+        if {'OG Short', 'Bearish FVG'}.issubset(fuentes):
+            enviar_alerta("🔻 Señal BAJISTA: OG Short + Bearish FVG")
+            limpiar_señales(['OG Short', 'Bearish FVG'], recientes)
+
     except Exception as e:
-        print("❌ Error al parsear JSON:", str(e))
+        print("❌ Error al parsear JSON:", str(e), flush=True)
         return 'Invalid JSON', 400
-
-
-    ahora = time.time()
-    señales.append({
-        'source': data.get('source'),
-        'timestamp': ahora
-    })
-
-    # Filtrar señales de últimos 5 minutos
-    recientes = [s for s in señales if ahora - s['timestamp'] < 300]
-    fuentes = set(s['source'] for s in recientes)
-
-    # Detectar señal alcista: OG Long + Bullish FVG
-    if {'OG Long', 'Bullish FVG'}.issubset(fuentes):
-        enviar_alerta("✅ Señal ALCISTA: OG Long + Bullish FVG")
-        señales.clear()
-
-    # Detectar señal bajista: OG Short + Bearish FVG
-    if {'OG Short', 'Bearish FVG'}.issubset(fuentes):
-        enviar_alerta("🔻 Señal BAJISTA: OG Short + Bearish FVG")
-        señales.clear()
 
     return '', 200
 
+def limpiar_señales(targets, recientes):
+    global señales
+    señales.extend([s for s in recientes if s['source'] not in targets])
+
 def enviar_alerta(mensaje):
-    print("🚨 Enviando alerta:", mensaje)
+    print("🚨 Enviando alerta a Telegram:", mensaje, flush=True)
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, data={'chat_id': CHAT_ID, 'text': mensaje})
+    payload = {'chat_id': CHAT_ID, 'text': mensaje}
+    response = requests.post(url, data=payload)
+    print("📤 Respuesta Telegram:", response.status_code, response.text, flush=True)
 
-import os
-
+# Inicio en Render (puerto dinámico)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
-
