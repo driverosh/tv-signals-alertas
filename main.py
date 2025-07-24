@@ -10,8 +10,8 @@ app = Flask(__name__)
 TELEGRAM_TOKEN = '7987965778:AAGTlTvYdUIw-O2F5kjopasav7B1FmKEyok'
 CHAT_ID = '8155134155'
 
-# Señales recibidas recientemente
-señales = deque(maxlen=100)  # mantiene las últimas 100 señales
+# Señales recibidas recientemente (últimos 5 minutos máx)
+señales = deque(maxlen=100)
 
 @app.route('/')
 def home():
@@ -21,7 +21,6 @@ def home():
 def webhook():
     print("🔥 Webhook recibido", flush=True)
 
-    # Ver contenido en bruto
     body = request.data.decode('utf-8')
     print("🔍 Body:", body, flush=True)
 
@@ -40,14 +39,15 @@ def webhook():
         recientes = [s for s in señales if ahora - s['timestamp'] < 300]
         fuentes = set(s['source'] for s in recientes)
 
-        if {'OG Long', 'Bullish FVG'}.issubset(fuentes):
-            enviar_alerta("✅ Señal ALCISTA: OG Long + Bullish FVG")
-            # eliminar esas señales específicas
-            limpiar_señales(['OG Long', 'Bullish FVG'], recientes)
+        # Señal ALCISTA completa
+        if {'OG Long', 'Bullish FVG', 'Bullish CHoCH'}.issubset(fuentes):
+            enviar_alerta("✅ Señal ALCISTA: OG Long + Bullish FVG + CHoCH")
+            limpiar_señales(['OG Long', 'Bullish FVG', 'Bullish CHoCH'], recientes)
 
-        if {'OG Short', 'Bearish FVG'}.issubset(fuentes):
-            enviar_alerta("🔻 Señal BAJISTA: OG Short + Bearish FVG")
-            limpiar_señales(['OG Short', 'Bearish FVG'], recientes)
+        # Señal BAJISTA completa
+        if {'OG Short', 'Bearish FVG', 'Bearish CHoCH'}.issubset(fuentes):
+            enviar_alerta("🔻 Señal BAJISTA: OG Short + Bearish FVG + CHoCH")
+            limpiar_señales(['OG Short', 'Bearish FVG', 'Bearish CHoCH'], recientes)
 
     except Exception as e:
         print("❌ Error al parsear JSON:", str(e), flush=True)
@@ -66,7 +66,7 @@ def enviar_alerta(mensaje):
     response = requests.post(url, data=payload)
     print("📤 Respuesta Telegram:", response.status_code, response.text, flush=True)
 
-# Inicio en Render (puerto dinámico)
+# Inicio para entorno Render u otro
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
